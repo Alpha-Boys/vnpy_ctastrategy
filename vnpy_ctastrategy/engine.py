@@ -1,5 +1,3 @@
-""""""
-
 import importlib
 import os
 import sys
@@ -32,7 +30,8 @@ from vnpy.trader.object import (
 from vnpy.trader.event import (
     EVENT_TICK,
     EVENT_ORDER,
-    EVENT_TRADE
+    EVENT_TRADE,
+    EVENT_ACCOUNT
 )
 from vnpy.trader.constant import (
     Direction,
@@ -75,19 +74,22 @@ class CtaEngine(BaseEngine):
 
     engine_type: EngineType = EngineType.LIVE  # live trading engine
 
-    setting_filename: str = "cta_strategy_setting.json"
-    data_filename: str = "cta_strategy_data.json"
+    # setting_filename: str = "cta_strategy_setting.json"
+    # data_filename: str = "cta_strategy_data.json"
 
     def __init__(self, main_engine: MainEngine, event_engine: EventEngine) -> None:
         """"""
-        super(CtaEngine, self).__init__(main_engine, event_engine, APP_NAME)
-
-        self.setting_filename = self.main_engine.global_setting['strategy_setting.file']
-        self.data_filename = self.main_engine.global_setting['strategy_data.file']
         super().__init__(main_engine, event_engine, APP_NAME)
 
         self.strategy_setting: dict = {}                                # strategy_name: dict
-        self.strategy_data: dict = {}                                   # strategy_name: dict
+        self.strategy_data: dict = {}
+
+        # Get settings from main_engine attributes
+        # self.setting_filename = Path(getattr(main_engine, "strategy_setting.file", "cta_strategy_setting.json"))
+        # self.data_filename = Path(getattr(main_engine, "strategy_data.file", "cta_strategy_data.json"))
+        self.setting_filename = self.main_engine.global_setting['strategy_setting.file']
+        self.data_filename = self.main_engine.global_setting['strategy_data.file']
+
 
         self.classes: dict = {}                                         # class_name: stategy_class
         self.strategies: dict = {}                                      # strategy_name: strategy
@@ -97,13 +99,14 @@ class CtaEngine(BaseEngine):
         self.strategy_orderid_map: defaultdict = defaultdict(set)       # strategy_name: orderid set
 
         self.stop_order_count: int = 0                                  # for generating stop_orderid
-        self.stop_orders: dict[str, StopOrder] = {}                     # stop_orderid: stop_order
+        self.stop_orders: Dict[str, StopOrder] = {}                     # stop_orderid: stop_order
 
         self.init_executor: ThreadPoolExecutor = ThreadPoolExecutor(max_workers=1)
 
         self.vt_tradeids: set = set()                                   # for filtering duplicate trade
 
-        self.database: BaseDatabase = get_database()
+        # self.database: BaseDatabase = get_database()
+        self.database: BaseDatabase = None
         self.datafeed: BaseDatafeed = get_datafeed()
 
     def init_engine(self) -> None:
@@ -124,8 +127,8 @@ class CtaEngine(BaseEngine):
         self.event_engine.register(EVENT_TICK, self.process_tick_event)
         self.event_engine.register(EVENT_ORDER, self.process_order_event)
         self.event_engine.register(EVENT_TRADE, self.process_trade_event)
-        self.event_engine.register(EVENT_POSITION, self.process_position_event)
         self.event_engine.register(EVENT_ACCOUNT, self.process_account_event)
+        self.event_engine.register(EVENT_POSITION, self.process_position_event)
 
         log_engine: LogEngine = self.main_engine.get_engine("log")
         log_engine.register_log(EVENT_CTA_LOG)
@@ -506,8 +509,8 @@ class CtaEngine(BaseEngine):
             return []
 
         # Round order price and volume to nearest incremental value
-        price = round_to(price, contract.pricetick)
-        volume = round_to(volume, contract.min_volume)
+        price: float = round_to(price, contract.pricetick)
+        volume: float = round_to(volume, contract.min_volume)
 
         if stop:
             if contract.stop_supported:
@@ -821,18 +824,15 @@ class CtaEngine(BaseEngine):
         path2: Path = Path.cwd().joinpath("strategies")
         self.load_strategy_class_from_folder(path2, "strategies")
 
-        # TODO add json.cfg for custom strategies folder path
-        class_path_str = self.main_engine.global_setting['strategy_class.file']
-        if len(class_path_str.strip()) > 0:
-            class_path = class_path_str.split(';')
-            for p in class_path:
-                if p not in [path1, path2]:
-                    parent = Path(p).parent
-                    module_name = Path(p).name
-                    if parent not in sys.path:
-                        sys.path.append(str(parent))
-                    self.load_strategy_class_from_folder(Path(p), module_name)
-
+        # 3. Try configured path from main engine
+        strategy_path = self.main_engine.global_setting['strategy_class.file']
+        if strategy_path:
+            path3 = Path(strategy_path).absolute()
+            if path3.is_dir():
+                self.write_log(f"Loading strategies from configured path: {path3}")
+                self.load_strategy_class_from_folder(path3, "strategies")
+            else:
+                self.write_log(f"Warning: Configured strategy path is not a valid directory: {path}")
 
     def load_strategy_class_from_folder(self, path: Path, module_name: str = "") -> None:
         """
