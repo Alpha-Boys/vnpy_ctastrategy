@@ -31,7 +31,8 @@ from vnpy.trader.event import (
     EVENT_TICK,
     EVENT_ORDER,
     EVENT_TRADE,
-    EVENT_ACCOUNT
+    EVENT_ACCOUNT,
+    EVENT_POSITION
 )
 from vnpy.trader.constant import (
     Direction,
@@ -131,7 +132,7 @@ class CtaEngine(BaseEngine):
         self.event_engine.register(EVENT_POSITION, self.process_position_event)
 
         log_engine: LogEngine = self.main_engine.get_engine("log")
-        log_engine.register_log(EVENT_CTA_LOG)
+        log_engine.register_event()
 
     def init_datafeed(self) -> None:
         """
@@ -174,8 +175,6 @@ class CtaEngine(BaseEngine):
     def process_order_event(self, event: Event) -> None:
         """"""
         order: OrderData = event.data
-
-        self.offset_converter.update_order(order)
 
         strategy: CtaTemplate | None = self.orderid_strategy_map.get(order.vt_orderid, None)
         if not strategy:
