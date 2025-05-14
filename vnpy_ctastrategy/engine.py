@@ -132,7 +132,7 @@ class CtaEngine(BaseEngine):
         self.event_engine.register(EVENT_POSITION, self.process_position_event)
 
         log_engine: LogEngine = self.main_engine.get_engine("log")
-        log_engine.register_event()
+        log_engine.register_log(EVENT_CTA_LOG)
 
     def init_datafeed(self) -> None:
         """
