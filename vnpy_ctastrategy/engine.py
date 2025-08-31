@@ -831,7 +831,7 @@ class CtaEngine(BaseEngine):
                 self.write_log(f"Loading strategies from configured path: {path3}")
                 self.load_strategy_class_from_folder(path3, "strategies")
             else:
-                self.write_log(f"Warning: Configured strategy path is not a valid directory: {path}")
+                self.write_log(f"Warning: Configured strategy path is not a valid directory: {strategy_path}")
 
     def load_strategy_class_from_folder(self, path: Path, module_name: str = "") -> None:
         """
